@@ -1,98 +1,94 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { Calendar } from 'react-native-calendars';
+import "../../global.css";
+import { supabase } from '../../src/lib/supabase';
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [slots, setSlots] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  // Fetch slots for the selected day
+  useEffect(() => {
+    fetchSlots();
+  }, [selectedDate]);
+
+  const fetchSlots = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('timeslots')
+      .select('*')
+      .gte('start_time', `${selectedDate}T00:00:00Z`)
+      .lte('start_time', `${selectedDate}T23:59:59Z`)
+      .order('start_time', { ascending: true });
+
+    if (!error) setSlots(data || []);
+    setLoading(false);
+  };
+
+  return (
+    <ScrollView className="flex-1 bg-brand-black">
+      {/* Hero Section */}
+      <View className="py-12 px-6 items-center bg-brand-purple">
+        <Text className="text-brand-gold text-4xl font-extrabold text-center uppercase">Hawks Performance</Text>
+        <Text className="text-white text-base mt-2">Chaska Shed Training Facility</Text>
+      </View>
+
+      {/* Calendar Section */}
+      <View className="w-full max-w-3xl mx-auto p-4">
+        <Text className="text-brand-gold text-xl font-bold mb-4 uppercase tracking-wider">Facility Schedule</Text>
+        
+        <Calendar
+          theme={{
+            backgroundColor: '#121212',
+            calendarBackground: '#1A1A1A',
+            textSectionTitleColor: '#D4AF37',
+            selectedDayBackgroundColor: '#D4AF37',
+            selectedDayTextColor: '#000000',
+            todayTextColor: '#4B0082',
+            dayTextColor: '#FFFFFF',
+            monthTextColor: '#D4AF37',
+            arrowColor: '#D4AF37',
+          }}
+          onDayPress={(day: any) => setSelectedDate(day.dateString)}
+          markedDates={{
+            [selectedDate]: { selected: true, disableTouchEvent: true }
+          }}
+        />
+
+        {/* Timeslot List */}
+        <View className="mt-6">
+          <Text className="text-white font-bold mb-4">Availability for {selectedDate}</Text>
+          
+          {loading ? (
+            <ActivityIndicator color="#D4AF37" />
+          ) : slots.length > 0 ? (
+            slots.map((slot) => (
+              <View key={slot.id} className="flex-row items-center justify-between bg-brand-charcoal p-4 rounded-lg mb-2 border-l-4 border-brand-purple">
+                <Text className="text-white font-mono">
+                  {new Date(slot.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+                <View className={`px-3 py-1 rounded-full ${slot.is_booked ? 'bg-red-900/50' : 'bg-green-900/50'}`}>
+                  <Text className={slot.is_booked ? 'text-red-400' : 'text-green-400'}>
+                    {slot.is_booked ? 'Taken' : 'Available'}
+                  </Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text className="text-gray-500 italic">No slots listed for this date.</Text>
+          )}
+        </View>
+      </View>
+
+      {/* Footer Info */}
+      <View className="w-full max-w-3xl mx-auto p-8 bg-brand-charcoal">
+        <Text className="text-brand-gold font-bold">LOCATION</Text>
+        <Text className="text-gray-400">123 Performance Way, Suite 100</Text>
+        <Text className="text-brand-gold font-bold mt-4">OPERATING HOURS</Text>
+        <Text className="text-gray-400">Daily: 6:00 AM - 10:00 PM</Text>
+      </View>
+    </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});

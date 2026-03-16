@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@layer components {
+  .btn-gold {
+    @apply bg-brand-gold py-3 px-6 rounded-md shadow-lg active:opacity-80;
+  }
+}
