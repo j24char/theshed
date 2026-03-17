@@ -1,4 +1,4 @@
-import { Link, Tabs, useRouter } from 'expo-router'; // Add Link
+import { Link, Tabs, useRouter, useSegments } from 'expo-router'; // Add Link
 import React, { useEffect, useState } from 'react';
 import { Pressable, Text } from 'react-native'; // Add Pressable
 import "../../global.css";
@@ -8,6 +8,7 @@ export default function TabLayout() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const router = useRouter();
+  const segments = useSegments();
 
   useEffect(() => {
     // Check current session and get email
@@ -24,6 +25,26 @@ export default function TabLayout() {
 
     return () => authListener.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    async function checkWaiver() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('waiver_signed')
+        .eq('id', user.id)
+        .single();
+
+      // If they haven't signed and aren't already on the waiver page, redirect them
+      const inWaiverGroup = segments[0] === 'waiver';
+      if (profile && !profile.waiver_signed && !inWaiverGroup) {
+        router.replace('/waiver');
+      }
+    }
+    checkWaiver();
+  }, [segments]);
 
   if (isLoggedIn === null) return null;
 
