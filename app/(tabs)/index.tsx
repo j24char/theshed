@@ -1,12 +1,13 @@
+import { endOfDay, format, startOfDay } from 'date-fns';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import "../../global.css";
 import { supabase } from '../../src/lib/supabase';
 
 export default function HomeScreen() {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -36,27 +37,35 @@ export default function HomeScreen() {
     };
   }, [player]);
 
-  useEffect(() => {
-    fetchSlots();
-  }, [selectedDate]);
 
-  const fetchSlots = async () => {
+  //const [selectedDate, setSelectedDate] = useState(new Date()); // Default to today
+
+  const fetchSlots = async (date: Date) => {
     setLoading(true);
     
+    // Define the start and end of the chosen day in ISO format
+    const start = startOfDay(date).toISOString();
+    const end = endOfDay(date).toISOString();
+
     const { data, error } = await supabase
       .from('timeslots')
-      .select('id, start_time, end_time, is_booked') // Explicitly exclude 'booked_by'
-      // .gte(...) <-- Comment these out for one refresh
-      // .lte(...)
-      
+      .select('*')
+      .gte('start_time', start)
+      .lte('start_time', end)
+      .order('start_time', { ascending: true });
+
     if (error) {
-      console.error("DEBUG - Supabase Error:", error);
+      console.error("Error fetching slots:", error.message);
     } else {
-      console.log("DEBUG - Data Received:", data);
       setSlots(data || []);
     }
     setLoading(false);
   };
+
+  // Re-run whenever the user changes the date
+  useEffect(() => {
+    fetchSlots(selectedDate);
+  }, [selectedDate]);
 
   return (
     <ScrollView className="flex-1 bg-brand-black">
@@ -106,24 +115,40 @@ export default function HomeScreen() {
         </View>
 
         {/* Timeslot List */}
-        <View className="mt-8">
-          {loading ? (
-            <ActivityIndicator color="#D4AF37" />
-          ) : (
-            slots.map((slot) => (
-              <View key={slot.id} className="flex-row items-center justify-between bg-brand-charcoal p-5 rounded-xl mb-3 border-l-4 border-brand-purple">
-                <Text className="text-white font-mono text-lg">
-                  {new Date(slot.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        <View className="p-6">
+        <Text className="text-brand-gold text-2xl font-bold uppercase mb-4">
+          Available Sessions — {format(selectedDate, 'MMM do')}
+        </Text>
+
+        {loading ? (
+          <ActivityIndicator color="#D4AF37" />
+        ) : slots.length > 0 ? (
+          <View className="flex-row flex-wrap justify-between">
+            {slots.map((slot) => (
+              <Pressable 
+                key={slot.id}
+                disabled={slot.is_booked}
+                className={`w-[48%] mb-4 p-4 rounded-xl border ${
+                  slot.is_booked 
+                    ? 'bg-white/5 border-white/10' 
+                    : 'bg-brand-charcoal border-brand-gold/50'
+                }`}
+              >
+                <Text className={`text-lg font-bold ${slot.is_booked ? 'text-white/20' : 'text-white'}`}>
+                  {format(new Date(slot.start_time), 'h:mm a')}
                 </Text>
-                <View className={`px-4 py-1 rounded-full ${slot.is_booked ? 'bg-red-900/30' : 'bg-green-900/30'}`}>
-                  <Text className={slot.is_booked ? 'text-red-400' : 'text-green-400'}>
-                    {slot.is_booked ? 'Taken' : 'Available'}
-                  </Text>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
+                <Text className="text-xs text-brand-gold/60 uppercase tracking-widest mt-1">
+                  {slot.is_booked ? 'Reserved' : 'Available'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <View className="py-20 items-center border border-dashed border-white/10 rounded-2xl">
+            <Text className="text-white/40 font-medium">No sessions scheduled for this date.</Text>
+          </View>
+        )}
+      </View>
       </View>
 
       {/* Footer Info */}
