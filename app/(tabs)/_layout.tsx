@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Link, Tabs, useRouter, useSegments } from 'expo-router'; // Add Link
 import React, { useEffect, useState } from 'react';
 import { Pressable, Text } from 'react-native'; // Add Pressable
@@ -7,24 +8,48 @@ import { supabase } from '../../src/lib/supabase';
 export default function TabLayout() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
-    // Check current session and get email
+    // 1. Check current session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsLoggedIn(!!session);
+      const hasSession = !!session;
+      setIsLoggedIn(hasSession);
       setUserEmail(session?.user?.email || null);
+      
+      if (session?.user?.id) {
+        fetchRole(session.user.id);
+      }
     });
 
+    // 2. Listen for auth changes (Login, Logout, etc.)
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      setIsLoggedIn(!!session);
+      const hasSession = !!session;
+      setIsLoggedIn(hasSession);
       setUserEmail(session?.user?.email || null);
+
+      if (hasSession && session.user.id) {
+        fetchRole(session.user.id);
+      } else {
+        setRole(null); // Clear role on sign out
+      }
+
       if (event === 'SIGNED_OUT') router.replace('/');
     });
 
     return () => authListener.subscription.unsubscribe();
   }, []);
+
+  const fetchRole = async (userId: string) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single();
+    setRole(data?.role || 'user');
+  };
 
   useEffect(() => {
     async function checkWaiver() {
@@ -75,7 +100,14 @@ export default function TabLayout() {
       <Tabs.Screen name="schedule" options={{ title: 'Book', href: isLoggedIn ? '/schedule' : null }} />
       <Tabs.Screen name="signup" options={{ title: 'Join', href: isLoggedIn ? null : '/signup' }} />
       <Tabs.Screen name="signin" options={{ title: 'Sign In', href: isLoggedIn ? null : '/signin' }} />
-      <Tabs.Screen name="admin" options={{ title: 'Admin', href: isLoggedIn ? '/admin' : null }} />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: 'Admin',
+          href: role === 'admin' ? '/admin' : null, // This hides the tab button
+          tabBarIcon: ({ color }) => <Ionicons name="settings" size={24} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

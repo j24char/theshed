@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { supabase } from '../../src/lib/supabase';
 
 type DayHour = {
@@ -12,39 +14,25 @@ type DayHour = {
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-export default function AdminDashboard() {
-  // --- State ---
+export default function AdminScreen() {
+  const router = useRouter();
+
+  // --- 1. ALL HOOKS MUST BE AT THE TOP ---
   const [hours, setHours] = useState<DayHour[]>([]);
   const [editingDay, setEditingDay] = useState<DayHour | null>(null);
   const [adminSlots, setAdminSlots] = useState<any[]>([]);
   const [adminDate, setAdminDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
-  // --- Initialization ---
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  useEffect(() => {
-    fetchAdminSlots(adminDate);
-  }, [adminDate]);
-
-  const fetchInitialData = async () => {
-    setLoading(true);
-    await fetchHours();
-    await fetchAdminSlots(adminDate);
-    setLoading(false);
-  };
-
-  // --- Data Fetching ---
+  // --- 2. DATA FETCHING LOGIC ---
   const fetchHours = async () => {
     const { data } = await supabase.from('facility_hours').select('*').order('day_of_week');
     if (data) setHours(data);
   };
 
-  const fetchAdminSlots = async (date: Date) => {
-    // Create non-mutating start/end of day
+  const fetchAdminSlots = useCallback(async (date: Date) => {
     const start = new Date(date);
     start.setHours(0, 0, 0, 0);
     const end = new Date(date);
@@ -58,9 +46,46 @@ export default function AdminDashboard() {
       .order('start_time', { ascending: true });
 
     if (!error) setAdminSlots(data || []);
+  }, []);
+
+  const checkAdminStatus = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      router.replace('/');
+      return;
+    }
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (data?.role === 'admin') {
+      setIsAdmin(true);
+      // Initialize data only after admin confirm
+      await fetchHours();
+      await fetchAdminSlots(adminDate);
+      setLoading(false);
+    } else {
+      setIsAdmin(false);
+      router.replace('/');
+    }
   };
 
-  // --- Handlers ---
+  // --- 3. LIFECYCLE EFFECTS ---
+  useEffect(() => {
+    checkAdminStatus();
+  }, []);
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchAdminSlots(adminDate);
+    }
+  }, [adminDate, isAdmin, fetchAdminSlots]);
+
+  // --- 4. INTERACTION HANDLERS ---
   const changeDate = (offset: number) => {
     const newDate = new Date(adminDate);
     newDate.setDate(newDate.getDate() + offset);
@@ -69,20 +94,25 @@ export default function AdminDashboard() {
 
   const forceGenerateSlots = async () => {
     setActionLoading(true);
-    
-    // Format the adminDate to a simple YYYY-MM-DD string for Postgres
-    const dateString = adminDate.toISOString().split('T')[0];
+
+    // Use a format that ignores timezone offsets entirely
+    const year = adminDate.getFullYear();
+    const month = String(adminDate.getMonth() + 1).padStart(2, '0');
+    const day = String(adminDate.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`; 
+
+    console.log("Generating for Date String:", dateString); // Should be '2026-03-18'
 
     const { error } = await supabase.rpc('generate_slots_for_date', { 
       target_date: dateString 
     });
 
     if (error) {
-      Alert.alert("Generation Failed", error.message);
+      Alert.alert("Sync Failed", error.message);
     } else {
-      // Re-fetch the slots for the current view immediately
-      fetchAdminSlots(adminDate);
-      Alert.alert("Success", `Slots generated for ${dateString}`);
+      // Clear old local state so the new (correct) hours show up
+      setAdminSlots([]); 
+      await fetchAdminSlots(adminDate);
     }
     setActionLoading(false);
   };
@@ -103,52 +133,19 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteSlot = async (id: string) => {
-    // 1. Optimistic Update: Remove it from the local state immediately
-    const originalSlots = [...adminSlots];
-    setAdminSlots(prev => prev.filter(slot => slot.id !== id));
-
-    const { error } = await supabase
-      .from('timeslots')
-      .delete()
-      .eq('id', id);
-
-    console.log("Delete Status:", status);
-
-    if (error) {
-      // 2. Rollback: If the DB rejected the delete, put the slots back
-      setAdminSlots(originalSlots);
-      Alert.alert("Delete Failed", error.message);
-      console.error("Delete Error:", error);
-    } else {
-      // 3. Hard Sync: Refresh just to be 100% sure we are in sync with the server
-      fetchAdminSlots(adminDate);
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    const start = new Date(adminDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(adminDate);
-    end.setHours(23, 59, 59, 999);
-
-    // We ask once before wiping the whole day
-    const confirmed = confirm("Wipe all slots for this day?"); 
-    if (!confirmed) return;
-
-    const { error } = await supabase
-      .from('timeslots')
-      .delete()
-      .gte('start_time', start.toISOString())
-      .lte('start_time', end.toISOString());
-
+    const { error } = await supabase.from('timeslots').delete().eq('id', id);
     if (!error) {
-      fetchAdminSlots(adminDate);
-    } else {
-      console.error("Bulk Delete Error:", error.message);
+      setAdminSlots(prev => prev.filter(s => s.id !== id));
     }
   };
 
-  if (loading) {
+  const timeOptions = Array.from({ length: 24 }, (_, i) => {
+    const hour = i.toString().padStart(2, '0');
+    return { label: `${hour}:00`, value: `${hour}:00:00` };
+  });
+
+  // --- 5. CONDITIONAL RENDERING (MUST BE AT THE BOTTOM) ---
+  if (isAdmin === null || (loading && isAdmin)) {
     return (
       <View className="flex-1 bg-black justify-center items-center">
         <ActivityIndicator color="#D4AF37" size="large" />
@@ -156,145 +153,135 @@ export default function AdminDashboard() {
     );
   }
 
+  if (isAdmin === false) return null;
+
   return (
     <ScrollView className="flex-1 bg-black px-6 pt-12">
-      {/* Header & Global Sync */}
-      <View className="mb-8">
-        <Text className="text-brand-gold text-4xl font-black uppercase tracking-tighter">Admin Panel</Text>
-        <Text className="text-white/40 uppercase text-xs tracking-widest mt-1">Shed App Facility Control</Text>
-      </View>      
+      <Text className="text-brand-gold text-3xl font-black uppercase mb-6">Facility Admin</Text>
 
-      {/* 1. Daily Slot Manager Section */}
+      <Pressable 
+        onPress={forceGenerateSlots}
+        disabled={actionLoading}
+        className="bg-brand-gold/10 border border-brand-gold/40 p-5 rounded-2xl mb-10 flex-row justify-center items-center"
+      >
+        {actionLoading ? <ActivityIndicator color="#D4AF37" /> : (
+          <Text className="text-brand-gold font-bold uppercase tracking-widest">
+            Generate {DAYS[adminDate.getDay()]} Slots
+          </Text>
+        )}
+      </Pressable>
+
       <View className="mb-12">
-        <View className="mt-8 mb-4 flex-row justify-between items-end">
-          <View>
-            <Text className="text-brand-gold text-2xl font-black uppercase">Daily Manager</Text>
-            <Text className="text-white/30 text-[10px] uppercase tracking-widest">Edit available time slots for the selected day</Text>
-          </View>
-          
-          <Pressable 
-            onPress={handleBulkDelete}
-            className="bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-lg"
-          >
-            <Text className="text-red-500 text-xs font-bold uppercase">Wipe Day</Text>
+        <View className="flex-row justify-between items-center bg-brand-charcoal p-4 rounded-2xl mb-4">
+          <Pressable onPress={() => changeDate(-1)} className="p-2">
+            <Ionicons name="chevron-back" size={24} color="#D4AF37" />
+          </Pressable>
+          <Text className="text-white font-bold">
+            {adminDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </Text>
+          <Pressable onPress={() => changeDate(1)} className="p-2">
+            <Ionicons name="chevron-forward" size={24} color="#D4AF37" />
           </Pressable>
         </View>
 
-        {/* Date Scrubber */}
-        <View className="flex-row justify-between items-center bg-brand-charcoal p-4 rounded-2xl mb-4 border border-white/5 shadow-xl">
-          <Pressable onPress={() => changeDate(-1)} className="p-2 bg-white/5 rounded-full">
-            <Ionicons name="chevron-back" size={20} color="#D4AF37" />
-          </Pressable>
-          <View className="items-center">
-            <Text className="text-white font-bold text-lg">{adminDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</Text>
-            <Text className="text-brand-gold/50 text-[10px] uppercase tracking-tighter">Change Date</Text>
-          </View>
-          <Pressable onPress={() => changeDate(1)} className="p-2 bg-white/5 rounded-full">
-            <Ionicons name="chevron-forward" size={20} color="#D4AF37" />
-          </Pressable>
-        </View>
-
-        {/* Slots List */}
         {adminSlots.length > 0 ? (
           adminSlots.map((slot) => (
-            <View key={slot.id} className="flex-row justify-between items-center bg-white/5 p-5 rounded-2xl mb-3 border border-white/5">
-              <View>
-                <Text className="text-white font-bold text-lg">
-                  {new Date(slot.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-                <Text className={slot.is_booked ? "text-brand-gold" : "text-white/40"}>
-                  {slot.is_booked ? "• Booked" : "Available"}
-                </Text>
-              </View>
-              <Pressable 
-                //onPress={() => Alert.alert("Delete?", "Remove this slot?", [{text: "No"}, {text: "Delete", style: 'destructive', onPress: () => handleDeleteSlot(slot.id)}])}
-                onPress={() => handleDeleteSlot(slot.id)}
-                className="bg-red-500/10 p-3 rounded-full"
-              >
-                <Ionicons name="trash" size={18} color="#ef4444" />
+            <View key={slot.id} className="flex-row justify-between items-center bg-white/5 p-4 rounded-xl mb-2 border border-white/5">
+              <Text className="text-white font-bold">
+                {new Date(slot.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              <Pressable onPress={() => handleDeleteSlot(slot.id)}>
+                <Ionicons name="trash" size={20} color="#ef4444" />
               </Pressable>
             </View>
           ))
         ) : (
-          <View className="p-10 items-center bg-white/5 rounded-3xl border border-dashed border-white/10">
-            <Text className="text-white/20 italic">No slots for this date</Text>
-          </View>
+          <Text className="text-white/30 text-center py-4 italic">No slots for this date</Text>
         )}
       </View>
 
-      <Pressable 
-        onPress={forceGenerateSlots}
-        className="bg-brand-gold/10 border border-brand-gold/40 p-5 rounded-2xl mb-10 flex-row justify-center items-center"
-      >
-        <Ionicons name="flash" size={18} color="#D4AF37" />
-        <Text className="text-brand-gold font-bold uppercase tracking-widest ml-2">
-          Generate Slots for {adminDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-        </Text>
-      </Pressable>
-
-      {/* 2. Facility Rules Section */}
       <View className="mb-20">
-        <Text className="text-white text-xl font-bold uppercase tracking-tight mb-4">Recurring Hours</Text>
+        <Text className="text-white/50 uppercase text-xs mb-4">Recurring Hours</Text>
         {hours.map((day) => (
-          <Pressable 
-            key={day.day_of_week}
-            onPress={() => setEditingDay(day)}
-            className="bg-brand-charcoal mb-3 p-5 rounded-2xl flex-row justify-between items-center border border-white/5"
-          >
-            <View>
-              <Text className="text-white font-bold text-lg">{DAYS[day.day_of_week]}</Text>
-              <Text className={day.is_closed ? "text-red-500" : "text-brand-gold/80"}>
-                {day.is_closed ? "Closed" : `${day.open_time.slice(0,5)} - ${day.close_time.slice(0,5)}`}
-              </Text>
-            </View>
-            <Ionicons name="settings-outline" size={18} color="#D4AF37" />
+          <Pressable key={day.day_of_week} onPress={() => setEditingDay(day)} className="bg-brand-charcoal mb-2 p-4 rounded-xl flex-row justify-between">
+            <Text className="text-white font-bold">{DAYS[day.day_of_week]}</Text>
+            <Text className="text-brand-gold">{day.is_closed ? "Closed" : (day.open_time.slice(0,5) + " - " + day.close_time.slice(0,5))}</Text>
           </Pressable>
         ))}
       </View>
 
-      {/* Edit Modal (Bottom Sheet Style) */}
       <Modal visible={!!editingDay} animationType="slide" transparent={true}>
         <View className="flex-1 justify-end bg-black/80">
-          <View className="bg-brand-charcoal p-8 rounded-t-[40px] border-t border-brand-gold/30">
-            <View className="flex-row justify-between items-center mb-8">
-              <Text className="text-brand-gold text-2xl font-black uppercase">{editingDay ? DAYS[editingDay.day_of_week] : ""}</Text>
-              <Pressable onPress={() => setEditingDay(null)} className="bg-white/10 p-2 rounded-full">
-                <Ionicons name="close" size={24} color="white" />
+          <View className="bg-brand-charcoal p-8 rounded-t-3xl border-t border-brand-gold/30">
+            
+            {/* Header */}
+            <View className="flex-row justify-between mb-6">
+              <Text className="text-brand-gold text-2xl font-black uppercase">
+                {editingDay ? DAYS[editingDay.day_of_week] : ""}
+              </Text>
+              <Pressable onPress={() => setEditingDay(null)}>
+                <Ionicons name="close" size={28} color="#FFFFFF" />
               </Pressable>
             </View>
-
-            <View className="flex-row justify-between items-center mb-8 bg-black/30 p-5 rounded-2xl">
+            
+            {/* Open/Closed Toggle */}
+            <View className="flex-row justify-between items-center mb-6 bg-black/40 p-4 rounded-xl">
               <Text className="text-white font-bold text-lg">Facility Open</Text>
               <Switch 
                 value={!editingDay?.is_closed}
                 onValueChange={(val) => setEditingDay(prev => prev ? {...prev, is_closed: !val} : null)}
                 trackColor={{ false: "#333", true: "#D4AF37" }}
+                thumbColor={!editingDay?.is_closed ? "#FFFFFF" : "#999"}
               />
             </View>
 
             {!editingDay?.is_closed && (
-              <View className="flex-row justify-between mb-8">
-                <View className="w-[47%]">
-                  <Text className="text-white/40 uppercase text-[10px] tracking-widest mb-2 font-bold">Open</Text>
-                  <TextInput 
-                    className="bg-black text-white p-5 rounded-2xl border border-white/10 font-bold"
-                    value={editingDay?.open_time}
-                    onChangeText={(t) => setEditingDay(prev => prev ? {...prev, open_time: t} : null)}
-                  />
+              <View className="flex-row justify-between items-center mb-8">
+                {/* Open Time Picker */}
+                <View className="w-[45%]">
+                  <Text className="text-brand-gold/70 text-[10px] uppercase font-bold mb-2 text-center">Open</Text>
+                  <View className="bg-black/40 rounded-xl overflow-hidden border border-white/10">
+                    <Picker
+                      selectedValue={editingDay?.open_time}
+                      onValueChange={(itemValue) => setEditingDay(prev => prev ? {...prev, open_time: itemValue} : null)}
+                      dropdownIconColor="#D4AF37"
+                      style={{ color: '#444' }} // Fixes the black-on-black text
+                    >
+                      {timeOptions.map(opt => (
+                        <Picker.Item key={opt.value} label={opt.label} value={opt.value} color="#444" />
+                      ))}
+                    </Picker>
+                  </View>
                 </View>
-                <View className="w-[47%]">
-                  <Text className="text-white/40 uppercase text-[10px] tracking-widest mb-2 font-bold">Close</Text>
-                  <TextInput 
-                    className="bg-black text-white p-5 rounded-2xl border border-white/10 font-bold"
-                    value={editingDay?.close_time}
-                    onChangeText={(t) => setEditingDay(prev => prev ? {...prev, close_time: t} : null)}
-                  />
+
+                <Ionicons name="arrow-forward" size={20} color="#D4AF37" style={{ marginTop: 20 }} />
+
+                {/* Close Time Picker */}
+                <View className="w-[45%]">
+                  <Text className="text-brand-gold/70 text-[10px] uppercase font-bold mb-2 text-center">Close</Text>
+                  <View className="bg-black/40 rounded-xl overflow-hidden border border-white/10">
+                    <Picker
+                      selectedValue={editingDay?.close_time}
+                      onValueChange={(itemValue) => setEditingDay(prev => prev ? {...prev, close_time: itemValue} : null)}
+                      dropdownIconColor="#D4AF37"
+                      style={{ color: '#444' }}
+                    >
+                      {timeOptions.map(opt => (
+                        <Picker.Item key={opt.value} label={opt.label} value={opt.value} color="#444" />
+                      ))}
+                    </Picker>
+                  </View>
                 </View>
               </View>
             )}
 
-            <Pressable onPress={saveHours} className="bg-brand-gold p-6 rounded-2xl items-center shadow-lg">
-              <Text className="text-black font-black uppercase tracking-widest text-lg">Apply Changes</Text>
+            <Pressable 
+              onPress={saveHours} 
+              className="bg-brand-gold p-5 rounded-2xl items-center active:bg-white"
+            >
+              <Text className="text-black font-black uppercase tracking-widest text-lg">
+                Update Schedule
+              </Text>
             </Pressable>
           </View>
         </View>
