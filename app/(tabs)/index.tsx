@@ -19,6 +19,7 @@ export default function HomeScreen() {
   const player = useVideoPlayer(videoSource, (p) => {
     p.muted = true;
     p.loop = false;
+    p.volume = 0;
   });
 
   useFocusEffect(
@@ -28,9 +29,10 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
-    if (player) {
+    setTimeout(() => {
+      player.muted = true;
       player.play();
-    }
+    }, 0);
   }, [player]);
     
   const fetchSlots = async (dateString: string) => {
@@ -73,8 +75,7 @@ export default function HomeScreen() {
   return (
     <ScrollView className="flex-1 bg-brand-black">
       {/* HERO SECTION */}
-      {/* <View className="relative h-[400px] w-full overflow-hidden justify-center"> */}
-      <Pressable onPress={() => player.play()} className="relative h-[400px] w-full overflow-hidden justify-center">
+      <View className="relative h-[400px] w-full overflow-hidden justify-center">
         <VideoView
           player={player}
           style={{ width: '100%', height: '100%', position: 'absolute' }}
@@ -84,6 +85,7 @@ export default function HomeScreen() {
           // CRITICAL MOBILE FLAGS:
           allowsVideoFrameAnalysis={false} 
           startsPictureInPictureAutomatically={false}
+          showsTimecodes={false}
         />
         <View className="absolute top-0 left-0 w-full h-full bg-black/60" />
         <View className="z-10 px-6 items-center">
@@ -94,9 +96,8 @@ export default function HomeScreen() {
             Precision Training
           </Text>
         </View>
-      {/*</View>*/}
-      </Pressable>
-
+      </View>
+      
       <View className="w-full max-w-4xl mx-auto p-4 mt-6">
         <Text className="text-brand-gold text-xl font-bold mb-4 uppercase tracking-wider">Facility Schedule</Text>
         
