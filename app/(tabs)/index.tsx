@@ -105,16 +105,28 @@ export default function HomeScreen() {
               backgroundColor: '#121212',
               calendarBackground: '#1A1A1A',
               textSectionTitleColor: '#D4AF37',
-              selectedDayBackgroundColor: '#D4AF37',
-              selectedDayTextColor: '#000000',
-              todayTextColor: '#D4AF37',
+              
+              // Global Theme Defaults
               dayTextColor: '#FFFFFF',
+              todayTextColor: '#D4AF37',
               monthTextColor: '#D4AF37',
               arrowColor: '#D4AF37',
+              textDayFontWeight: '500',
+              
+              // This sets the DEFAULT selected style for the whole calendar
+              selectedDayBackgroundColor: '#4B0082', // Purple Circle
+              selectedDayTextColor: '#FFFFFF',      // Gold Text
             }}
-            // Calendar provides a string 'YYYY-MM-DD'
             onDayPress={(day: any) => setSelectedDate(day.dateString)}
-            markedDates={{ [selectedDate]: { selected: true } }}
+            markedDates={{
+              [selectedDate]: { 
+                selected: true, 
+                disableTouchEvent: true, 
+                // Explicitly defining the colors here ensures the "Circle" renders
+                selectedColor: '#4B0082', 
+                textColor: '#FFFFFF' 
+              }
+            }}
           />
         </View>
 

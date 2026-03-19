@@ -94,10 +94,10 @@ export default function TabLayout() {
         ),
       }}>
       
-      <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="messages" options={{ title: 'Alerts' }} />
-      <Tabs.Screen name="membership" options={{ title: 'Membership', href: isLoggedIn ? '/membership' : null }} />
-      <Tabs.Screen name="schedule" options={{ title: 'Book', href: isLoggedIn ? '/schedule' : null }} />
+      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} /> }} />
+      <Tabs.Screen name="messages" options={{ title: 'Alerts', tabBarIcon: ({ color }) => <Ionicons name="bell" size={24} color={color} /> }} />
+      <Tabs.Screen name="membership" options={{ title: 'Membership', href: isLoggedIn ? '/membership' : null, tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} /> }} />
+      <Tabs.Screen name="schedule" options={{ title: 'Book', href: isLoggedIn ? '/schedule' : null, tabBarIcon: ({ color }) => <Ionicons name="calendar" size={24} color={color} /> }} />
       <Tabs.Screen name="signup" options={{ title: 'Join', href: isLoggedIn ? null : '/signup' }} />
       <Tabs.Screen name="signin" options={{ title: 'Sign In', href: isLoggedIn ? null : '/signin' }} />
       <Tabs.Screen
