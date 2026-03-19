@@ -12,7 +12,7 @@ export default function Schedule() {
 
   useEffect(() => {
     fetchUserData();
-    fetchSlots();
+    fetchSlots(selectedDate); // Pass the selectedDate here
   }, [selectedDate]);
 
   const fetchUserData = async () => {
@@ -23,15 +23,28 @@ export default function Schedule() {
     }
   };
 
-  const fetchSlots = async () => {
+  const fetchSlots = async (dateString: string) => {
+    const targetDate = dateString || selectedDate; 
     setLoading(true);
-    const { data } = await supabase
+
+    // 1. Create the Local-to-UTC range (same as we did for the Home screen)
+    const localDate = new Date(`${dateString}T00:00:00`);
+    const start = localDate.toISOString();
+    const endDate = new Date(localDate);
+    endDate.setHours(endDate.getHours() + 24);
+    const end = endDate.toISOString();
+
+    // 2. FETCH WITH EXPLICIT ORDERING
+    const { data, error } = await supabase
       .from('timeslots')
       .select('*')
-      .gte('start_time', `${selectedDate}T00:00:00Z`)
-      .lte('start_time', `${selectedDate}T23:59:59Z`)
-      .order('start_time', { ascending: true });
-    setSlots(data || []);
+      .gte('start_time', start)
+      .lt('start_time', end)
+      .order('start_time', { ascending: true }); // <--- THIS IS THE CRITICAL LINE
+
+    if (!error) {
+      setSlots(data || []);
+    }
     setLoading(false);
   };
 
@@ -49,10 +62,10 @@ export default function Schedule() {
       .eq('is_booked', false); // Atomic check to prevent double-booking
 
     if (error) {
-      Alert.alert("Error", "Could not book slot. It may have just been taken.");
+      Alert.alert("Error", "Could not book slot.");
     } else {
       Alert.alert("Success", "Slot reserved!");
-      fetchSlots(); // Refresh UI
+      fetchSlots(selectedDate); // Pass selectedDate to refresh the correct day
     }
   };
 
