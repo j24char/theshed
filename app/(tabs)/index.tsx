@@ -73,7 +73,8 @@ export default function HomeScreen() {
   return (
     <ScrollView className="flex-1 bg-brand-black">
       {/* HERO SECTION */}
-      <View className="relative h-[400px] w-full overflow-hidden justify-center">
+      {/* <View className="relative h-[400px] w-full overflow-hidden justify-center"> */}
+      <Pressable onPress={() => player.play()} className="relative h-[400px] w-full overflow-hidden justify-center">
         <VideoView
           player={player}
           style={{ width: '100%', height: '100%', position: 'absolute' }}
@@ -93,7 +94,8 @@ export default function HomeScreen() {
             Precision Training
           </Text>
         </View>
-      </View>
+      {/*</View>*/}
+      </Pressable>
 
       <View className="w-full max-w-4xl mx-auto p-4 mt-6">
         <Text className="text-brand-gold text-xl font-bold mb-4 uppercase tracking-wider">Facility Schedule</Text>
