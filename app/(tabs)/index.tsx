@@ -12,13 +12,21 @@ export default function HomeScreen() {
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const videoSource = '/videos/0316.mp4';
-  
+  //const videoSource = '/videos/0316.mp4';
+  // Using the absolute path from the public root
+  const videoSource = { uri: '/videos/0316.mp4' };
+
   const player = useVideoPlayer(videoSource, (p) => {
     p.muted = true;
-    p.loop = true;
+    p.loop = false;
     p.play();
   });
+
+  useEffect(() => {
+    if (player) {
+      player.play();
+    }
+  }, [player]);
 
   const fetchSlots = async (dateString: string) => {
     setLoading(true);
