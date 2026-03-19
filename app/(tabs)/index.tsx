@@ -24,15 +24,15 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // This runs every time you navigate TO this tab
       fetchSlots(selectedDate);
-      
-      // Optional: Return a cleanup function if needed
-      return () => {
-        // console.log('Home screen blurred');
-      };
-    }, [selectedDate]) // Re-run if the user changed the calendar date
+    }, [selectedDate])
   );
+
+  useEffect(() => {
+    if (player) {
+      player.play();
+    }
+  }, [player]);
 
   const fetchSlots = async (dateString: string) => {
     setLoading(true);
