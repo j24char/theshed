@@ -1,6 +1,7 @@
 import { format, parseISO } from 'date-fns';
+import { useFocusEffect } from 'expo-router';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import "../../global.css";
@@ -12,7 +13,6 @@ export default function HomeScreen() {
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  //const videoSource = '/videos/0316.mp4';
   // Using the absolute path from the public root
   const videoSource = { uri: '/videos/0316.mp4' };
 
@@ -22,11 +22,17 @@ export default function HomeScreen() {
     p.play();
   });
 
-  useEffect(() => {
-    if (player) {
-      player.play();
-    }
-  }, [player]);
+  useFocusEffect(
+    useCallback(() => {
+      // This runs every time you navigate TO this tab
+      fetchSlots(selectedDate);
+      
+      // Optional: Return a cleanup function if needed
+      return () => {
+        // console.log('Home screen blurred');
+      };
+    }, [selectedDate]) // Re-run if the user changed the calendar date
+  );
 
   const fetchSlots = async (dateString: string) => {
     setLoading(true);
