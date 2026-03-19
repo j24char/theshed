@@ -74,15 +74,32 @@ export default function Schedule() {
     <ScrollView className="flex-1 bg-brand-black p-4">
       <View className="w-full max-w-3xl mx-auto p-4">
         <Calendar
-            theme={{
+          theme={{
+            backgroundColor: '#121212',
             calendarBackground: '#1A1A1A',
-            selectedDayBackgroundColor: '#D4AF37',
+            textSectionTitleColor: '#D4AF37',
+            
+            // Global Theme Defaults
             dayTextColor: '#FFFFFF',
+            todayTextColor: '#D4AF37',
             monthTextColor: '#D4AF37',
             arrowColor: '#D4AF37',
-            }}
-            onDayPress={(day: any) => setSelectedDate(day.dateString)}
-            markedDates={{ [selectedDate]: { selected: true } }}
+            textDayFontWeight: '500',
+            
+            // This sets the DEFAULT selected style for the whole calendar
+            selectedDayBackgroundColor: '#4B0082', // Purple Circle
+            selectedDayTextColor: '#FFFFFF',      // Gold Text
+          }}
+          onDayPress={(day: any) => setSelectedDate(day.dateString)}
+          markedDates={{
+            [selectedDate]: { 
+              selected: true, 
+              disableTouchEvent: true, 
+              // Explicitly defining the colors here ensures the "Circle" renders
+              selectedColor: '#4B0082', 
+              textColor: '#FFFFFF' 
+            }
+          }}
         />
 
         <View className="mt-6">
