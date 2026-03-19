@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Link, Tabs, useRouter, useSegments } from 'expo-router'; // Add Link
+import { Link, Tabs, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Pressable, Text } from 'react-native'; // Add Pressable
+import { Image, Pressable, Text, View } from 'react-native';
 import "../../global.css";
 import { supabase } from '../../src/lib/supabase';
 
@@ -77,7 +77,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: '#000000' },
-        headerTintColor: '#D4AF37',
+        headerTintColor: '#000000',
         tabBarStyle: { backgroundColor: '#000000', borderTopColor: '#4B0082' },
         tabBarActiveTintColor: '#D4AF37',
         // --- ADD THIS SECTION ---
@@ -92,6 +92,14 @@ export default function TabLayout() {
             </Link>
           ) : null
         ),
+        headerLeft: () => (
+          <View style={{ marginLeft: 15 }}>
+            <Image 
+              source={ require('../../assets/images/icon.png') } 
+              style={{ width: 48, height: 48, borderRadius: 1 }} 
+            />
+          </View>
+        )
       }}>
       
       <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} /> }} />
