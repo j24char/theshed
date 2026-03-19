@@ -7,19 +7,18 @@ import { Calendar } from 'react-native-calendars';
 import "../../global.css";
 import { supabase } from '../../src/lib/supabase';
 
+// Using the absolute path from the public root
+const videoSource = { uri: '/videos/0316.mp4' };
+
 export default function HomeScreen() {
   // Calendar uses 'YYYY-MM-DD' strings, so we initialize with today's string
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Using the absolute path from the public root
-  const videoSource = { uri: '/videos/0316.mp4' };
-
   const player = useVideoPlayer(videoSource, (p) => {
     p.muted = true;
     p.loop = false;
-    p.play();
   });
 
   useFocusEffect(
@@ -33,7 +32,7 @@ export default function HomeScreen() {
       player.play();
     }
   }, [player]);
-
+    
   const fetchSlots = async (dateString: string) => {
     setLoading(true);
     
@@ -81,6 +80,9 @@ export default function HomeScreen() {
           contentFit="cover"
           nativeControls={false}
           allowsFullscreen={false}
+          // CRITICAL MOBILE FLAGS:
+          allowsVideoFrameAnalysis={false} 
+          startsPictureInPictureAutomatically={false}
         />
         <View className="absolute top-0 left-0 w-full h-full bg-black/60" />
         <View className="z-10 px-6 items-center">
