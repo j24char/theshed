@@ -8,7 +8,7 @@ import "../../global.css";
 import { supabase } from '../../src/lib/supabase';
 
 // Using the absolute path from the public root
-const videoSource = { uri: '/videos/0316.mp4' };
+const videoSource = { uri: '/videos/0319.mp4' };
 
 export default function HomeScreen() {
   // Calendar uses 'YYYY-MM-DD' strings, so we initialize with today's string
@@ -20,6 +20,7 @@ export default function HomeScreen() {
     p.muted = true;
     p.loop = false;
     p.volume = 0;
+    //p.playbackRate = 0.9;
   });
 
   useFocusEffect(
