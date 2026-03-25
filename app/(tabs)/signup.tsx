@@ -24,7 +24,6 @@ export default function Signup() {
       email: email,
       password: password,
       options: {
-        // This maps to the "full_name" in our SQL trigger
         data: {
           full_name: fullName,
         },
@@ -32,10 +31,24 @@ export default function Signup() {
     });
 
     if (error) {
-      Alert.alert('Error', error.message);
+      // If email exists, Supabase throws an error here. 
+      // This alert will now definitely show because there is no navigation.
+      Alert.alert('Sign Up Failed', error.message);
+    } else if (data.user && data.session === null) {
+      // This is the "Confirmation Required" state
+      Alert.alert(
+        'Verify Your Email',
+        `A link has been sent to ${email}. Please click it to activate your account before logging in.`,
+        [
+          { 
+            text: 'OK', 
+            onPress: () => router.replace('/') // ONLY move after they click OK
+          }
+        ]
+      );
     } else {
-      Alert.alert('Success', 'Check your email for the confirmation link!');
-      router.replace('/'); // Redirect to home after success
+      // This handles the rare case where confirmation is off
+      router.replace('/membership');
     }
     setLoading(false);
   }

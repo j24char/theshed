@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Switch, Text, View } from 'react-native';
@@ -25,8 +26,18 @@ export default function AdminScreen() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [complianceList, setComplianceList] = useState<any[]>([]);
+  const [showCompliance, setShowCompliance] = useState(false);
 
   // --- 2. DATA FETCHING LOGIC ---
+  const fetchCompliance = async () => {
+    const { data } = await supabase
+      .from('admin_user_compliance')
+      .select('*')
+      .order('full_name');
+    if (data) setComplianceList(data);
+  };
+
   const fetchHours = async () => {
     const { data } = await supabase.from('facility_hours').select('*').order('day_of_week');
     if (data) setHours(data);
@@ -50,23 +61,15 @@ export default function AdminScreen() {
 
   const checkAdminStatus = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      router.replace('/');
-      return;
-    }
+    if (!user) { router.replace('/'); return; }
 
-    const { data } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
+    const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
 
     if (data?.role === 'admin') {
       setIsAdmin(true);
-      // Initialize data only after admin confirm
       await fetchHours();
       await fetchAdminSlots(adminDate);
+      await fetchCompliance(); // Load compliance data on start
       setLoading(false);
     } else {
       setIsAdmin(false);
@@ -85,6 +88,38 @@ export default function AdminScreen() {
     }
   }, [adminDate, isAdmin, fetchAdminSlots]);
 
+  const exportScheduleData = async () => {
+    const { data, error } = await supabase
+      .from('exportable_schedule')
+      .select('*')
+      .csv();
+
+    if (data) {
+      const blob = new Blob([data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `HawksShed_Full_Audit_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+    }
+  };
+
+  const exportUserData = async () => {
+    const { data, error } = await supabase
+      .from('signed_waivers')
+      .select('*')
+      .csv();
+    
+    if (data) {
+      const blob = new Blob([data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `HawksShed_User_Data_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+    }
+  };
+  
   // --- 4. INTERACTION HANDLERS ---
   const changeDate = (offset: number) => {
     const newDate = new Date(adminDate);
@@ -158,7 +193,7 @@ export default function AdminScreen() {
   return (
     <ScrollView className="flex-1 bg-black px-6 pt-12">
       <Text className="text-brand-gold text-3xl font-black uppercase mb-6">Facility Admin</Text>
-
+      
       <Pressable 
         onPress={forceGenerateSlots}
         disabled={actionLoading}
@@ -200,6 +235,7 @@ export default function AdminScreen() {
         )}
       </View>
 
+      
       <View className="mb-20">
         <Text className="text-white/50 uppercase text-xs mb-4">Recurring Hours</Text>
         {hours.map((day) => (
@@ -209,6 +245,54 @@ export default function AdminScreen() {
           </Pressable>
         ))}
       </View>
+
+      <View className="flex-row justify-between items-center mb-6">
+        <Text className="text-brand-gold text-3xl font-black uppercase">Schedule Management</Text>
+        <Pressable onPress={exportScheduleData} className="p-2 bg-white/10 rounded-full">
+          <Ionicons name="download-outline" size={24} color="#D4AF37" />
+        </Pressable>
+      </View>
+
+      <View className="flex-row justify-between items-center mb-6">
+        <Text className="text-brand-gold text-3xl font-black uppercase">User Management</Text>
+        <Pressable onPress={exportUserData} className="p-2 bg-white/10 rounded-full">
+          <Ionicons name="download-outline" size={24} color="#D4AF37" />
+        </Pressable>
+      </View>
+
+      <View className="mb-10">
+        <Pressable 
+          onPress={() => setShowCompliance(!showCompliance)}
+          className="flex-row justify-between items-center bg-brand-charcoal p-4 rounded-xl border border-brand-gold/20"
+        >
+          <Text className="text-white font-bold">User Waiver Compliance</Text>
+          <Ionicons name={showCompliance ? "chevron-up" : "chevron-down"} size={20} color="#D4AF37" />
+        </Pressable>
+
+        {showCompliance && (
+          <View className="mt-4 bg-white/5 rounded-2xl overflow-hidden border border-white/5">
+            {complianceList.map((user) => (
+              <View key={user.id} className="flex-row justify-between p-4 border-b border-white/5">
+                <View>
+                  <Text className="text-white font-medium">{user.full_name}</Text>
+                  <Text className="text-gray-500 text-[10px]">{user.email}</Text>
+                </View>
+                <View className="items-end">
+                  <Text className={user.waiver_status === 'SIGNED' ? "text-green-500 text-xs font-bold" : "text-red-500 text-xs font-bold"}>
+                    {user.waiver_status}
+                  </Text>
+                  {user.last_signed_date && (
+                    <Text className="text-gray-500 text-[9px]">
+                      {format(new Date(user.last_signed_date), 'MM/dd/yy')}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+
 
       <Modal visible={!!editingDay} animationType="slide" transparent={true}>
         <View className="flex-1 justify-end bg-black/80">

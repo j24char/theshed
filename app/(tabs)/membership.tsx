@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { WaiverModal } from '../../components/WaiverModal';
 import { supabase } from '../../src/lib/supabase';
 
 export default function Membership() {
   const [profile, setProfile] = useState<any>(null);
   const [myBookings, setMyBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showWaiver, setShowWaiver] = useState(false);
+  //const [hasWaiverRecord, setHasWaiverRecord] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -16,7 +19,7 @@ export default function Membership() {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (user) {
-      // 1. Fetch Profile
+      // Fetch Profile
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
@@ -24,12 +27,23 @@ export default function Membership() {
         .single();
       setProfile(profileData);
 
-      // 2. Fetch User's Bookings
+      // 3. NEW: Check the 'signed_waivers' table directly
+      const { data: waiverData } = await supabase
+        .from('signed_waivers')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      const signed = waiverData && waiverData.length > 0;
+      //setHasWaiverRecord(signed);
+      if (!signed) setShowWaiver(true);
+
+      // Fetch User's Bookings
       const { data: bookingData } = await supabase
         .from('timeslots')
         .select('*')
         .eq('booked_by', user.id)
-        .gte('start_time', new Date().toISOString()) // Only future bookings
+        .gte('start_time', new Date().toISOString())
         .order('start_time', { ascending: true });
       setMyBookings(bookingData || []);
     }
@@ -60,6 +74,13 @@ export default function Membership() {
 
   return (
     <ScrollView className="flex-1 bg-brand-black p-6">
+      <WaiverModal 
+        visible={showWaiver} 
+        onSign={() => {
+          setShowWaiver(false);
+          //setHasWaiverRecord(true);
+        }} 
+      />
       <View className="w-full max-w-md mx-auto p-6 mt-10">
       {/* User Status Card */}
       <View className="bg-brand-charcoal p-6 rounded-2xl border border-brand-purple mb-8">
